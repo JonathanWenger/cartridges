@@ -75,6 +75,19 @@ def wait_for_port(host, port, q):
         q.put((host, port))
 
 
+def publish_ssh_environment() -> None:
+    env_file = "/root/.ssh/environment"
+    os.makedirs("/root/.ssh", exist_ok=True)
+    with open(env_file, "w") as handle:
+        for key, value in os.environ.items():
+            if key not in ["PWD", "OLDPWD", "_", "SHLVL"]:
+                handle.write(f"{key}={value}\n")
+    os.chmod(env_file, 0o600)
+
+    with open("/etc/ssh/sshd_config", "a") as handle:
+        handle.write("\nPermitUserEnvironment yes\n")
+
+
 @app.function(
     image=image,
     gpu=f"{GPU_TYPE}:{GPU_COUNT}",
@@ -88,6 +101,7 @@ def wait_for_port(host, port, q):
     timeout=3600 * 24,
 )
 def launch_ssh(q):
+    publish_ssh_environment()
 
     with modal.forward(22, unencrypted=True) as tunnel:
         host, port = tunnel.tcp_socket
