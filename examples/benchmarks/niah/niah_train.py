@@ -31,7 +31,7 @@ else:
     raise ValueError(f"Invalid model: {MODEL}")
 
 
-NIAH_PATH = "/home/sabri/code/cartridges/cartridges/data/ruler/_data/qwen3_4b-l100000-n1-k128-v1_1-essay-key_words-val_numbers-e83970e8.json"
+NIAH_PATH = "/root/cartridges/cartridges/data/ruler/_data/llama_3.2_3b_instruct-l100000-n1-c64-h2-essay-ruler-3e4df256.json"
 
 
 config = TrainConfig(
