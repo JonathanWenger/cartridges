@@ -15,7 +15,7 @@ import os
 
 MINUTES = os.environ.get("MINUTES", 60)  # seconds
 PORT = os.environ.get("PORT", 8000)
-GPU_COUNT = os.environ.get("GPU_COUNT", 1)
+GPU_COUNT = os.environ.get("GPU_COUNT", 8)
 GPU_TYPE = os.environ.get("GPU_TYPE", "H100")
 BRANCH = os.environ.get("BRANCH", "main")
 
