@@ -55,7 +55,7 @@ flashinfer_cache_vol = modal.Volume.from_name(
 )
 
 
-app = modal.App(f"tokasaurus-ssh-{GPU_COUNT}x{GPU_TYPE}")
+app = modal.App(f"jw-ssh-{GPU_COUNT}x{GPU_TYPE}")
 
 LOCAL_PORT = 9090
 
