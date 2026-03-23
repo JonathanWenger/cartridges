@@ -93,7 +93,7 @@ def publish_ssh_environment() -> None:
     gpu=f"{GPU_TYPE}:{GPU_COUNT}",
     allow_concurrent_inputs=999,
     scaledown_window=15 * MINUTES,
-    secrets=[modal.Secret.from_name("sabri-api-keys")],
+    secrets=[modal.Secret.from_name("jw-api-keys")],
     volumes={
         "/root/.cache/huggingface": hf_cache_vol,
         "/root/.cache/flashinfer": flashinfer_cache_vol,
