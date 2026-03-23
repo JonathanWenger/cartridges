@@ -5,6 +5,7 @@ After running this with `modal run launch_ssh.py`, connect to SSH with `ssh -p 9
 or from VSCode/Pycharm.
 This uses simple password authentication, but you can store your own key in a modal Secret instead.
 """
+
 import modal
 import threading
 import socket
@@ -25,7 +26,7 @@ image = (
     .run_commands(
         "mkdir -p /run/sshd",
         "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config",
-        "echo 'root:password' | chpasswd"
+        "echo 'root:password' | chpasswd",
     )
     .env({"NVM_DIR": "/root/.nvm"})
     .run_commands(  # install nvm and node for claude code
@@ -35,28 +36,29 @@ image = (
         '. "/root/.nvm/nvm.sh" && npm install -g @anthropic-ai/claude-code',
     )
     .run_commands(
-        "git clone https://$GITHUB_TOKEN@github.com/ScalingIntelligence/tokasaurus.git /root/tokasaurus",
+        "git clone https://$GITHUB_TOKEN@github.com/JonathanWenger/cartridges.git /root/cartridges",
         secrets=[modal.Secret.from_name("sabri-api-keys")],
     )
-    .run_commands(f"cd /root/tokasaurus && git fetch --all")
-    .run_commands("cd /root/tokasaurus && pip install -e .[dev]")
+    .run_commands(f"cd /root/cartridges && git fetch --all")
+    .run_commands("cd /root/cartridges && pip install -e .[dev]")
 )
 if BRANCH != "main":
-    image = image.run_commands(f"cd /root/tokasaurus && git fetch --all && git checkout --track origin/{BRANCH}")
-image = image.run_commands("cd /root/tokasaurus && git pull")
+    image = image.run_commands(
+        f"cd /root/cartridges && git fetch --all && git checkout --track origin/{BRANCH}"
+    )
+image = image.run_commands("cd /root/cartridges && git pull")
 
 
-
-
-hf_cache_vol = modal.Volume.from_name(
-    "huggingface-cache", create_if_missing=True
+hf_cache_vol = modal.Volume.from_name("huggingface-cache", create_if_missing=True)
+flashinfer_cache_vol = modal.Volume.from_name(
+    "flashinfer-cache", create_if_missing=True
 )
-flashinfer_cache_vol = modal.Volume.from_name("flashinfer-cache", create_if_missing=True)
 
 
 app = modal.App(f"tokasaurus-ssh-{GPU_COUNT}x{GPU_TYPE}")
 
 LOCAL_PORT = 9090
+
 
 def wait_for_port(host, port, q):
     start_time = time.monotonic()
@@ -67,8 +69,11 @@ def wait_for_port(host, port, q):
         except OSError as exc:
             time.sleep(0.01)
             if time.monotonic() - start_time >= 30.0:
-                raise TimeoutError("Waited too long for port 22 to accept connections") from exc
+                raise TimeoutError(
+                    "Waited too long for port 22 to accept connections"
+                ) from exc
         q.put((host, port))
+
 
 @app.function(
     image=image,
@@ -80,7 +85,7 @@ def wait_for_port(host, port, q):
         "/root/.cache/huggingface": hf_cache_vol,
         "/root/.cache/flashinfer": flashinfer_cache_vol,
     },
-    timeout=3600 * 24
+    timeout=3600 * 24,
 )
 def launch_ssh(q):
 
@@ -90,12 +95,15 @@ def launch_ssh(q):
 
         subprocess.run(["/usr/sbin/sshd", "-D"])
 
+
 @app.local_entrypoint()
 def main():
     try:
         import sshtunnel
     except ImportError:
-        raise ImportError("sshtunnel is not installed. Please install it with `pip install sshtunnel`.")
+        raise ImportError(
+            "sshtunnel is not installed. Please install it with `pip install sshtunnel`."
+        )
 
     with modal.Queue.ephemeral() as q:
         launch_ssh.spawn(q)
@@ -106,9 +114,9 @@ def main():
             (host, port),
             ssh_username="root",
             ssh_password="password",
-            remote_bind_address=('127.0.0.1', 22),
-            local_bind_address=('127.0.0.1', LOCAL_PORT),
-            allow_agent=False
+            remote_bind_address=("127.0.0.1", 22),
+            local_bind_address=("127.0.0.1", LOCAL_PORT),
+            allow_agent=False,
         )
 
         try:
