@@ -1,7 +1,7 @@
 """
 Sets up an SSH server in a Modal container.
 This requires you to `pip install sshtunnel` locally.
-After running this with `modal run launch_ssh.py`, connect to SSH with `ssh -p 9090 root@localhost`,
+After running this with `modal run infra/modal_ssh.py`, connect to SSH with `ssh -p 9090 root@localhost`,
 or from VSCode/Pycharm.
 This uses simple password authentication, but you can store your own key in a modal Secret instead.
 """
@@ -37,7 +37,7 @@ image = (
     )
     .run_commands(
         "git clone https://$GITHUB_TOKEN@github.com/JonathanWenger/cartridges.git /root/cartridges",
-        secrets=[modal.Secret.from_name("sabri-api-keys")],
+        secrets=[modal.Secret.from_name("jw-api-keys")],
     )
     .run_commands(f"cd /root/cartridges && git fetch --all")
     .run_commands("cd /root/cartridges && pip install -e .[dev]")
@@ -80,7 +80,7 @@ def wait_for_port(host, port, q):
     gpu=f"{GPU_TYPE}:{GPU_COUNT}",
     allow_concurrent_inputs=999,
     scaledown_window=15 * MINUTES,
-    secrets=[modal.Secret.from_name("sabri-api-keys")],
+    secrets=[modal.Secret.from_name("jw-api-keys")],
     volumes={
         "/root/.cache/huggingface": hf_cache_vol,
         "/root/.cache/flashinfer": flashinfer_cache_vol,

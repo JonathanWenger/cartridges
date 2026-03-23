@@ -8,24 +8,25 @@ from pathlib import Path
 import modal
 
 
-
 root = Path(__file__).parent.parent.parent
 
 
 # --- BEGIN ARGS ---
 PORT = 8080
 BRANCH = os.environ.get("BRANCH", "geoff/cartridges")
-MODEL_NAME = os.environ.get("MODEL_NAME", "meta-llama/Llama-3.2-3B-Instruct") 
+MODEL_NAME = os.environ.get("MODEL_NAME", "meta-llama/Llama-3.2-3B-Instruct")
 DP_SIZE = int(os.environ.get("DP_SIZE", 1))
 PP_SIZE = int(os.environ.get("PP_SIZE", 1))
 MAX_TOPK_LOGPROBS = int(os.environ.get("MAX_TOPK_LOGPROBS", 20))
-GPU_TYPE: Literal["H100", "H200", "B200", "A100-80GB", "A100-40GB"] = os.environ.get("GPU_TYPE", "H100")
+GPU_TYPE: Literal["H100", "H200", "B200", "A100-80GB", "A100-40GB"] = os.environ.get(
+    "GPU_TYPE", "H100"
+)
 MIN_CONTAINERS = int(os.environ.get("MIN_CONTAINERS", 0))
 MAX_CONTAINERS = int(os.environ.get("MAX_CONTAINERS", 32))
 SCALEDOWN_WINDOW = int(os.environ.get("SCALEDOWN_WINDOW", 1))
 ALLOW_CONCURRENT_INPUTS = int(os.environ.get("ALLOW_CONCURRENT_INPUTS", 8))
 MAX_COMPLETION_TOKENS = os.environ.get("MAX_COMPLETION_TOKENS", str(128_000))
-SECRETS = os.environ.get("SECRETS", "sabri-api-keys")
+SECRETS = os.environ.get("SECRETS", "jw-api-keys")
 # --- END ARGS ---
 
 MINUTES = 60  # seconds
@@ -42,20 +43,22 @@ image = (
     .pip_install("wandb")
 )
 if BRANCH != "main":
-    image = image.run_commands(f"cd /root/tokasaurus && git fetch --all && git checkout --track origin/{BRANCH}")
+    image = image.run_commands(
+        f"cd /root/tokasaurus && git fetch --all && git checkout --track origin/{BRANCH}"
+    )
 image = image.run_commands("cd /root/tokasaurus && git pull", force_build=True)
-image = image.env({
-    "MODEL_NAME": MODEL_NAME, 
-    "MAX_COMPLETION_TOKENS": MAX_COMPLETION_TOKENS, 
-    "MAX_TOPK_LOGPROBS": str(MAX_TOPK_LOGPROBS),
-    "DP_SIZE": str(DP_SIZE),
-    "PP_SIZE": str(PP_SIZE),
-})
-
-
-hf_cache_vol = modal.Volume.from_name(
-    "huggingface-cache", create_if_missing=True
+image = image.env(
+    {
+        "MODEL_NAME": MODEL_NAME,
+        "MAX_COMPLETION_TOKENS": MAX_COMPLETION_TOKENS,
+        "MAX_TOPK_LOGPROBS": str(MAX_TOPK_LOGPROBS),
+        "DP_SIZE": str(DP_SIZE),
+        "PP_SIZE": str(PP_SIZE),
+    }
 )
+
+
+hf_cache_vol = modal.Volume.from_name("huggingface-cache", create_if_missing=True)
 flashinfer_cache_vol = modal.Volume.from_name(
     "flashinfer-cache", create_if_missing=True
 )
@@ -97,8 +100,8 @@ def wait_for_port(port, host="localhost", timeout=60.0):
     },
 )
 @modal.web_server(
-    port=PORT, 
-    startup_timeout=5 * MINUTES,     
+    port=PORT,
+    startup_timeout=5 * MINUTES,
 )
 def serve():
     import subprocess
@@ -106,10 +109,10 @@ def serve():
 
     os.system("nvidia-smi")
     os.system("which nvidia-smi")
-    os.environ["OPENAI_API_KEY"] = "*"     # placeholder
+    os.environ["OPENAI_API_KEY"] = "*"  # placeholder
     PING_TIMEOUT_SECONDS = 1.0
     WAIT_FOR_SERVER_BACKOFF_SECONDS = 1.0
-    
+
     cmd = [
         "toka",
         f"model={MODEL_NAME}",
@@ -123,10 +126,10 @@ def serve():
         f"wandb_project=tokasaurus",
     ]
     if MAX_COMPLETION_TOKENS is not None:
-        cmd.append(f"max_completion_tokens={MAX_COMPLETION_TOKENS}")   
+        cmd.append(f"max_completion_tokens={MAX_COMPLETION_TOKENS}")
 
     def ping() -> bool:
-        """Check if the server is responsive. ReturnsTrue if the server responds with 
+        """Check if the server is responsive. ReturnsTrue if the server responds with
         "pong", False otherwise.
         """
         try:
@@ -138,8 +141,8 @@ def serve():
             return False
 
     TIMEOUT = 300
-    
-    subprocess.Popen(" ".join(cmd),shell=True)
+
+    subprocess.Popen(" ".join(cmd), shell=True)
     start_time = time.time()
     while time.time() - start_time < TIMEOUT:
         if ping():
