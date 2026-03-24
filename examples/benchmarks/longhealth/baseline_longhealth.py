@@ -3,20 +3,29 @@ from pathlib import Path
 
 import pydrantic
 
-from cartridges.clients.openai import CartridgeConfig, OpenAIClient
-from cartridges.data.longhealth.resources import LongHealthResource
-from cartridges.evaluate import ICLBaseline, GenerationEvalRunConfig
+from cartridges.clients.openai import OpenAIClient
 from cartridges.data.longhealth.evals import LongHealthMultipleChoiceGenerateDataset
-from cartridges.evaluate import GenerationEvalConfig
-
+from cartridges.data.longhealth.resources import LongHealthResource
+from cartridges.evaluate import (
+    GenerationEvalConfig,
+    GenerationEvalRunConfig,
+    ICLBaseline,
+)
 from cartridges.utils.wandb import WandBConfig
 
-
-base_url = os.environ.get("CARTRIDGES_VLLM_QWEN3_4B_URL", "http://localhost:8000")
+MODEL = os.environ.get("MODEL", "llama")
+if MODEL == "llama":
+    model_name = "meta-llama/Llama-3.2-3B-Instruct"
+    base_url = os.environ.get("CARTRIDGES_VLLM_LLAMA_3B_URL", "http://localhost:8000")
+elif MODEL == "qwen":
+    model_name = "Qwen/Qwen3-4b"
+    base_url = os.environ.get("CARTRIDGES_VLLM_QWEN3_4B_URL", "http://localhost:8000")
+else:
+    raise ValueError(f"Invalid model: {MODEL}")
 
 client = OpenAIClient.Config(
     base_url=os.path.join(base_url, "v1"),
-    model_name="Qwen/Qwen3-4b",
+    model_name=model_name,
 )
 
 

@@ -370,6 +370,15 @@ def train(config: TrainConfig):
             with ddp_ctx_manager:
                 with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
 
+                    # TODO: do a forward pass with the vanilla model (no cartridges) and store
+                    # queries and keys per layer
+
+                    # model(
+                    #     input_ids=batch.input_ids.to(local_rank),
+                    #     seq_ids=batch.element_ids.to(local_rank),
+                    #     position_ids=batch.position_ids.to(local_rank),
+                    # )
+
                     t0 = time.time()
                     outputs = wrapped_model(
                         input_ids=batch.input_ids.to(local_rank),
