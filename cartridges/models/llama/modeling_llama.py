@@ -239,7 +239,7 @@ def flex_attention_forward(
     kernel_options = kwargs.get("kernel_options", None)
     attn = flex_attention_train if mode == "train" else flex_attention_generate
 
-    score_mod = None # TODO: 
+    score_mod = None 
     if attn_bias is not None:
         def score_mod(score, b, h, q_idx, kv_idx):
             return score + attn_bias[b, h, q_idx, kv_idx]
