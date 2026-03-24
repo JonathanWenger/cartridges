@@ -287,12 +287,9 @@ class TrainableCache(nn.Module):
 class PartiallyTrainableCache(TrainableCache):
     """A trainable cache where values are computed as a function of the keys.
 
-    Only the keys are free parameters; values are produced by a per-layer linear
-    projection applied to the trainable keys. This halves the number of trainable
-    parameters in the cartridge while still allowing the model to learn a rich
-    key–value relationship.
-
-    The projection can be changed by overriding :meth:`compute_values`.
+    Only the keys are free parameters; values are produced by a per-layer function from
+    the trainable keys. This halves the number of trainable
+    parameters in the cartridge while still allowing the model to learn compacted keys.
 
     Args:
         config: Attention configuration (n_layers, n_heads, head_dim).
@@ -329,8 +326,6 @@ class PartiallyTrainableCache(TrainableCache):
 
     def compute_values(self, keys: torch.Tensor, layer_idx: int) -> torch.Tensor:
         """Compute values from trainable keys for a given layer.
-
-        Override this method to use a different value function.
 
         Args:
             keys: ``(1, n_heads, num_trainable_tokens, head_dim)``
