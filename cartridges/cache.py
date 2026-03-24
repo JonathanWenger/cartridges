@@ -1,13 +1,13 @@
 import abc
-from dataclasses import dataclass
 import itertools
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from pydrantic import ObjectConfig
 import torch
 import torch.nn as nn
+from pydrantic import ObjectConfig
 
 from cartridges.utils import get_logger
 
@@ -312,17 +312,20 @@ class PartiallyTrainableCache(TrainableCache):
         super().__init__(config, init_keys, init_values, num_frozen_tokens)
 
         if self._num_trainable_tokens > 0:
-            # Free the value parameters — values are computed from keys instead.
-            self.trainable_values = nn.ParameterList([])
-
-            # One linear projection per layer: (head_dim -> head_dim), applied
-            # along the last dimension of the key tensor.
-            self.value_projections = nn.ModuleList(
+            self.attn_biases = nn.ParameterList(
                 [
-                    nn.Linear(config.head_dim, config.head_dim, bias=False)
+                    nn.Parameter(torch.zeros(self._num_trainable_tokens))
                     for _ in range(config.n_layers)
                 ]
             )
+
+            if init_keys is not None:
+                self.trainable_values = [
+                    self.compute_values(self.trainable_keys[i], i)
+                    for i in range(config.n_layers)
+                ]
+            else:
+                self.trainable_values = []
 
     def compute_values(self, keys: torch.Tensor, layer_idx: int) -> torch.Tensor:
         """Compute values from trainable keys for a given layer.
@@ -336,7 +339,8 @@ class PartiallyTrainableCache(TrainableCache):
         Returns:
             Tensor of the same shape as ``keys``.
         """
-        return self.value_projections[layer_idx](keys)
+
+        raise NotImplementedError
         # TODO: implement
 
     def update(
