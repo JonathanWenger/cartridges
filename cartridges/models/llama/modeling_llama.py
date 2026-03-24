@@ -73,6 +73,7 @@ class LlamaBatch:
     attention_mask: Optional[torch.Tensor] = None
     use_cache: Optional[bool] = None
     mode: Literal["train", "generate"] = "train"
+    attn_bias: Optional[torch.Tensor] = None  # [1, H_or_1, q_len, total_kv_len]
 
     def update(self, **kwargs) -> "LlamaBatch":
         return LlamaBatch(
@@ -206,6 +207,7 @@ def flex_attention_forward(
     attention_mask: Union[torch.Tensor, "BlockMask"],
     scaling: Optional[float] = None,
     mode: Literal["train", "generate"] = "train",
+    attn_bias: Optional[torch.Tensor] = None,
     **kwargs,
 ) -> tuple[torch.Tensor, torch.Tensor]:
 
@@ -233,8 +235,11 @@ def flex_attention_forward(
 
     kernel_options = kwargs.get("kernel_options", None)
     attn = flex_attention_train if mode == "train" else flex_attention_generate
-    
 
+    score_mod = None
+    if attn_bias is not None:
+        def score_mod(score, b, h, q_idx, kv_idx):
+            return score + attn_bias[b, h, q_idx, kv_idx]
 
     # SE (07/26): This helps to avoid recompiles, since during prefix tuning, the first
     # layer's query does not require grad.
@@ -246,6 +251,7 @@ def flex_attention_forward(
         key,
         value,
         block_mask=block_mask,
+        score_mod=score_mod,
         enable_gqa=enable_gqa,
         scale=scaling,
         kernel_options=kernel_options,
@@ -315,6 +321,7 @@ class LlamaAttention(nn.Module):
             attention_mask=batch.attention_mask,
             scaling=self.scaling,
             mode=batch.mode,
+            attn_bias=batch.attn_bias,
         )
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
         attn_output = self.o_proj(attn_output)
@@ -418,6 +425,7 @@ class FlexLlamaModel(FlexLlamaPreTrainedModel):
         inputs_embeds: Optional[torch.FloatTensor] = None,
         use_cache: Optional[bool] = None,
         mode: Literal["train", "generate"] = "train",
+        attn_bias: Optional[torch.Tensor] = None,  # [1, H_or_1, q_len, total_kv_len]
     ) -> BaseModelOutputWithPast:
         """
         seq_ids (`torch.LongTensor` of shape `(sequence_length,)`):
@@ -467,6 +475,7 @@ class FlexLlamaModel(FlexLlamaPreTrainedModel):
             position_embeddings=position_embeddings,
             attention_mask=block_mask,
             mode=mode,
+            attn_bias=attn_bias,
         )
 
         for decoder_layer in self.layers[: self.config.num_hidden_layers]:
@@ -528,6 +537,7 @@ class FlexLlamaForCausalLM(FlexLlamaPreTrainedModel, GenerationMixin):
         use_cache: Optional[bool] = None,
         logits_to_keep: Union[int, torch.Tensor] = 0,
         mode: Literal["train", "generate"] = "train",
+        attn_bias: Optional[torch.Tensor] = None,  # [1, H_or_1, q_len, total_kv_len]
     ) -> CausalLMOutputWithPast:
         r"""
         seq_ids (`torch.LongTensor` of shape `(sequence_length,)`):
@@ -563,6 +573,7 @@ class FlexLlamaForCausalLM(FlexLlamaPreTrainedModel, GenerationMixin):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
             mode=mode,
+            attn_bias=attn_bias,
         )
 
         hidden_states = outputs.last_hidden_state

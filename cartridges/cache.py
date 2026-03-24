@@ -13,42 +13,46 @@ from cartridges.utils import get_logger
 
 logger = get_logger(__name__)
 
+
 @dataclass
 class AttnConfig:
     n_layers: int
     n_heads: int
     head_dim: int
 
+
 CARTRIDGE_SEQ_ID = -1
+
 
 class TrainableCache(nn.Module):
     """A trainable packed cache for generation with FlexAttention.
-    
+
     The cache must do two things, which a standard Hugging Face cache does not:
 
     - Keep track of sequence membership of the cache and expose it to the model via
-    the seq_ids method. The model will use this once per forward pass to construct 
-    the appropriate block mask. 
-    - Keep track of keys and values and expose them to the model in a packed manner via 
+    the seq_ids method. The model will use this once per forward pass to construct
+    the appropriate block mask.
+    - Keep track of keys and values and expose them to the model in a packed manner via
     the update method.
-    
+
     TODO (Sabri): Ensure that tokens from the same sequence are contiguous. Eventually,
     should just page the keys and values.
 
     Args:
-        config: The attention configuration, which we use to construct the 
-        init_keys (list[torch.Tensor], optional): A `config.n_layers` length list of 
+        config: The attention configuration, which we use to construct the
+        init_keys (list[torch.Tensor], optional): A `config.n_layers` length list of
             trainable keys for the cache, should be of shape (1, n_heads, num_trainable_tokens, head_dim).
-        init_values (list[torch.Tensor]): A `config.n_layers` length list of 
+        init_values (list[torch.Tensor]): A `config.n_layers` length list of
             trainable values for the cache, should be of shape (1, n_heads, num_trainable_tokens, head_dim).
-        num_frozen_tokens (int): The number of the trainable tokens to freeze at the 
+        num_frozen_tokens (int): The number of the trainable tokens to freeze at the
             beginning of the cache.
     """
+
     def __init__(
-        self,        
+        self,
         config: AttnConfig,
-        init_keys: list[torch.Tensor]=None,
-        init_values: list[torch.Tensor]=None,
+        init_keys: list[torch.Tensor] = None,
+        init_values: list[torch.Tensor] = None,
         num_frozen_tokens: int = 0,
     ):
         super().__init__()
@@ -69,21 +73,28 @@ class TrainableCache(nn.Module):
             self._num_frozen_tokens = num_frozen_tokens
             self._num_trainable_tokens = self._num_init_tokens - num_frozen_tokens
             assert len(init_keys) == config.n_layers == len(init_values)
-            
-            # we initialize the seq ids for the first 
-            # `num_trainable_tokens + num_frozen_tokens` tokens to -1, which means that 
-            # the tokens are part of the cartridge and should be attended to by 
+
+            # we initialize the seq ids for the first
+            # `num_trainable_tokens + num_frozen_tokens` tokens to -1, which means that
+            # the tokens are part of the cartridge and should be attended to by
             # all tokens.
-            _seq_ids =torch.full(
+            _seq_ids = torch.full(
                 (self._num_init_tokens,),
-                fill_value=CARTRIDGE_SEQ_ID, 
+                fill_value=CARTRIDGE_SEQ_ID,
                 dtype=torch.long,
             )
             self.register_buffer("_init_seq_ids", _seq_ids)
-            self.register_buffer("_seq_ids", _seq_ids)  # .to moves the tensor to the correct device
+            self.register_buffer(
+                "_seq_ids", _seq_ids
+            )  # .to moves the tensor to the correct device
 
             for vec in itertools.chain(init_keys, init_values):
-                assert vec.shape == (1, config.n_heads, self._num_init_tokens, config.head_dim)
+                assert vec.shape == (
+                    1,
+                    config.n_heads,
+                    self._num_init_tokens,
+                    config.head_dim,
+                )
 
             self.frozen_keys = nn.ParameterList(
                 [
@@ -119,9 +130,9 @@ class TrainableCache(nn.Module):
             )
             logger.info(f"num_trainable_tokens: {self._num_trainable_tokens}")
             logger.info(f"num_frozen_tokens: {self._num_frozen_tokens}")
-                
+
     def update(
-        self, 
+        self,
         new_keys: torch.Tensor,
         new_values: torch.Tensor,
         new_seq_ids: torch.Tensor,
@@ -129,27 +140,27 @@ class TrainableCache(nn.Module):
         skip_append: bool = False,
     ):
         """Update the cache with new keys and values while maintaining sequence contiguity.
-        
+
         Args:
             new_keys: (1, num_heads, seq_len, head_dim) tensor of new keys
-            new_values: (1, num_heads, seq_len, head_dim) tensor of new values  
+            new_values: (1, num_heads, seq_len, head_dim) tensor of new values
             new_seq_ids: (seq_len,) tensor of sequence ids for the new tokens
             layer_idx: index of the layer in the model.
-            skip_append: if True, do not append the new keys and values to the cache, 
-                just return the concatenation of the new_keys and values. 
+            skip_append: if True, do not append the new keys and values to the cache,
+                just return the concatenation of the new_keys and values.
         """
         assert new_seq_ids.shape[0] == new_keys.shape[2]
         assert new_seq_ids.shape[0] == new_values.shape[2]
 
         if layer_idx == 0 and not skip_append:
             # we assume the same seq ids at every layer. This allows us to create
-            # a single block mask for the entire model. 
+            # a single block mask for the entire model.
             if self._seq_ids is None:
                 self._seq_ids = new_seq_ids
             else:
                 self._seq_ids = torch.cat([self._seq_ids, new_seq_ids], dim=0)
             self._num_tokens += new_keys.shape[2]
-        
+
         keys = [new_keys]
         values = [new_values]
 
@@ -161,32 +172,32 @@ class TrainableCache(nn.Module):
         if not skip_append:
             self._keys[layer_idx] = torch.cat(keys, dim=2)
             self._values[layer_idx] = torch.cat(values, dim=2)
-        
+
         if self._num_trainable_tokens > 0:
             keys = [self.trainable_keys[layer_idx]] + keys
             values = [self.trainable_values[layer_idx]] + values
-        
+
         if self._num_frozen_tokens > 0:
             keys = [self.frozen_keys[layer_idx]] + keys
             values = [self.frozen_values[layer_idx]] + values
-        
+
         if self._num_trainable_tokens == 0 and self._num_frozen_tokens == 0:
             return self._keys[layer_idx], self._values[layer_idx]
 
         return torch.cat(keys, dim=2), torch.cat(values, dim=2)
-    
+
     def num_tokens(self) -> int:
         """Get the sequence length of the cache."""
         return self._num_frozen_tokens + self._num_trainable_tokens + self._num_tokens
-    
+
     def num_cartridge_tokens(self) -> int:
         """Get the number of tokens in the cartridge."""
         return self._num_frozen_tokens + self._num_trainable_tokens
-    
+
     def seq_ids(self) -> torch.Tensor:
         """Returns the sequence ids of the cache."""
         return self._seq_ids
-       
+
     def clear(self):
         self._keys = [None] * self.config.n_layers
         self._values = [None] * self.config.n_layers
@@ -213,7 +224,12 @@ class TrainableCache(nn.Module):
         checkpoint = torch.load(path, map_location=device, weights_only=False)
 
         # Ensure necessary keys are in the checkpoint
-        for key in ["trainable_keys", "trainable_values", "frozen_keys", "frozen_values"]:
+        for key in [
+            "trainable_keys",
+            "trainable_values",
+            "frozen_keys",
+            "frozen_values",
+        ]:
             if key not in checkpoint:
                 raise KeyError(f"Key '{key}' not found in checkpoint")
 
@@ -268,6 +284,120 @@ class TrainableCache(nn.Module):
         )
 
 
+class PartiallyTrainableCache(TrainableCache):
+    """A trainable cache where values are computed as a function of the keys.
+
+    Only the keys are free parameters; values are produced by a per-layer linear
+    projection applied to the trainable keys. This halves the number of trainable
+    parameters in the cartridge while still allowing the model to learn a rich
+    key–value relationship.
+
+    The projection can be changed by overriding :meth:`compute_values`.
+
+    Args:
+        config: Attention configuration (n_layers, n_heads, head_dim).
+        init_keys: Initial keys, same shape convention as :class:`TrainableCache`.
+        init_values: Used only to initialise frozen values; the trainable portion
+            is discarded and recomputed from keys during the forward pass.
+        num_frozen_tokens: Number of tokens at the start of the cache to freeze.
+    """
+
+    def __init__(
+        self,
+        config: AttnConfig,
+        init_keys: list[torch.Tensor] = None,
+        init_values: list[torch.Tensor] = None,
+        num_frozen_tokens: int = 0,
+    ):
+        super().__init__(config, init_keys, init_values, num_frozen_tokens)
+
+        if self._num_trainable_tokens > 0:
+            # Free the value parameters — values are computed from keys instead.
+            self.trainable_values = nn.ParameterList([])
+
+            # One linear projection per layer: (head_dim -> head_dim), applied
+            # along the last dimension of the key tensor.
+            self.value_projections = nn.ModuleList(
+                [
+                    nn.Linear(config.head_dim, config.head_dim, bias=False)
+                    for _ in range(config.n_layers)
+                ]
+            )
+
+    def compute_values(self, keys: torch.Tensor, layer_idx: int) -> torch.Tensor:
+        """Compute values from trainable keys for a given layer.
+
+        Override this method to use a different value function.
+
+        Args:
+            keys: ``(1, n_heads, num_trainable_tokens, head_dim)``
+            layer_idx: Transformer layer index.
+
+        Returns:
+            Tensor of the same shape as ``keys``.
+        """
+        return self.value_projections[layer_idx](keys)
+        # TODO: implement
+
+    def update(
+        self,
+        new_keys: torch.Tensor,
+        new_values: torch.Tensor,
+        new_seq_ids: torch.Tensor,
+        layer_idx: int,
+        skip_append: bool = False,
+    ):
+        assert new_seq_ids.shape[0] == new_keys.shape[2]
+        assert new_seq_ids.shape[0] == new_values.shape[2]
+
+        if layer_idx == 0 and not skip_append:
+            if self._seq_ids is None:
+                self._seq_ids = new_seq_ids
+            else:
+                self._seq_ids = torch.cat([self._seq_ids, new_seq_ids], dim=0)
+            self._num_tokens += new_keys.shape[2]
+
+        keys = [new_keys]
+        values = [new_values]
+
+        if self._keys[layer_idx] is not None:
+            keys = [self._keys[layer_idx]] + keys
+            values = [self._values[layer_idx]] + values
+
+        if not skip_append:
+            self._keys[layer_idx] = torch.cat(keys, dim=2)
+            self._values[layer_idx] = torch.cat(values, dim=2)
+
+        if self._num_trainable_tokens > 0:
+            trainable_k = self.trainable_keys[layer_idx]
+            trainable_v = self.compute_values(trainable_k, layer_idx)
+            keys = [trainable_k] + keys
+            values = [trainable_v] + values
+
+        if self._num_frozen_tokens > 0:
+            keys = [self.frozen_keys[layer_idx]] + keys
+            values = [self.frozen_values[layer_idx]] + values
+
+        if self._num_trainable_tokens == 0 and self._num_frozen_tokens == 0:
+            return self._keys[layer_idx], self._values[layer_idx]
+
+        return torch.cat(keys, dim=2), torch.cat(values, dim=2)
+
+    def save(self, path: str):
+        """Save trainable keys and frozen keys/values (computed values are excluded)."""
+        torch.save(
+            {
+                "trainable_keys": self.trainable_keys,
+                "trainable_values": nn.ParameterList(
+                    []
+                ),  # values are derived from keys
+                "frozen_keys": self.frozen_keys,
+                "frozen_values": self.frozen_values,
+            },
+            path,
+        )
+
+
 class KVCacheFactory(abc.ABC):
     class Config(ObjectConfig):
         _pass_as_config = True
@@ -280,7 +410,7 @@ class KVCacheFactory(abc.ABC):
 
     @abc.abstractmethod
     def initialize_kv_cache(
-        self, tokenizer, model, attn_config: AttnConfig 
+        self, tokenizer, model, attn_config: AttnConfig
     ) -> TrainableCache:
         raise NotImplementedError()
 
@@ -342,9 +472,7 @@ class KVCacheFactoryWithStateSaving(abc.ABC):
             assert maybe_cache.config == attn_config
             return maybe_cache
 
-        cache, metadata = self.initalize_kv_cache_impl(
-            tokenizer, model, attn_config
-        )
+        cache, metadata = self.initalize_kv_cache_impl(tokenizer, model, attn_config)
 
         Path(self.config.directory).mkdir(parents=True, exist_ok=True)
 
