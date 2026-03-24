@@ -324,7 +324,7 @@ class PartiallyTrainableCache(TrainableCache):
             else:
                 self.trainable_values = []
 
-    def compute_values(self, queries: torch.Tensor,keys: torch.Tensor, layer_idx: int) -> torch.Tensor:
+    def compute_values(self, queries: torch.Tensor, keys: torch.Tensor, layer_idx: int,) -> torch.Tensor:
         """Compute (trainable) values from trainable keys for a given layer.
 
         Args:
