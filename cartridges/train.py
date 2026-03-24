@@ -1,43 +1,43 @@
 from __future__ import annotations
-from abc import ABCMeta, abstractmethod
+
 import contextlib
-from dataclasses import dataclass, field
 import math
-from math import cos, pi
 import os
-from pathlib import Path
 import re
 import time
+from abc import ABCMeta, abstractmethod
+from dataclasses import dataclass, field
+from math import cos, pi
+from pathlib import Path
 from typing import Dict, List, Literal, Optional
 
 import pandas as pd
-from pydantic import Field
-from pydrantic import BaseConfig, ObjectConfig, RunConfig
 import torch
 import torch.amp
 import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.optim as optim
+from pydantic import Field
+from pydrantic import BaseConfig, ObjectConfig, RunConfig
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer
-import wandb
 
+import wandb
 from cartridges.cache import AttnConfig, KVCacheFactory, TrainableCache
 from cartridges.datasets import (
     DatasetBatch,
+    DataSource,
     GenerateEvalDataset,
     LossEvalDataset,
     TrainDataset,
-    DataSource,
 )
 from cartridges.models.config import ModelConfig
 from cartridges.utils import get_logger, seed_everything
 from cartridges.utils.wandb import WandBConfig, prepare_wandb
-
 
 logger = get_logger(__name__)
 
@@ -153,7 +153,7 @@ def train(config: TrainConfig):
     t0 = time.time()
     dataset = config.dataset.instantiate(tokenizer=tokenizer, seed=config.seed)
     logger.info(
-        f"Fininshed loading training dataset from disk, took {(time.time() - t0):.3}s"
+        f"Finished loading training dataset from disk, took {(time.time() - t0):.3}s"
     )
 
     ppl_evals: list[tuple[LossEvalConfig, TrainDataset]] = [    

@@ -1,17 +1,16 @@
 import os
-from pathlib import Path
 import socket
+from pathlib import Path
 
 import pydrantic
 from pydrantic.variables import FormatStringVariable
 
-from cartridges.initialization import KVFromText
-from cartridges.train import GenerationEvalConfig, TrainConfig
-from cartridges.models.config import HFModelConfig
-from cartridges.datasets import TrainDataset, DataSource
 from cartridges.data.longhealth.evals import LongHealthMultipleChoiceGenerateDataset
+from cartridges.datasets import DataSource, TrainDataset
+from cartridges.initialization import KVFromText
+from cartridges.models.config import HFModelConfig
+from cartridges.train import GenerationEvalConfig, TrainConfig
 from cartridges.utils.wandb import WandBConfig
-
 
 NUM_PATIENTS = 10
 patient_idxs = list(range(1, NUM_PATIENTS + 1))
@@ -28,8 +27,8 @@ if MODEL == "llama":
 
     data_sources = [
         "hazyresearch/m07d11_longhealth_synthesize_llama-3.2-3b_p10_n65536-0",
-        "hazyresearch/m07d11_longhealth_synthesize_llama-3.2-3b_p10_n65536-1",
-        "hazyresearch/m07d11_longhealth_synthesize_llama-3.2-3b_p10_n65536-2",
+        # "hazyresearch/m07d11_longhealth_synthesize_llama-3.2-3b_p10_n65536-1", # TODO: only for faster debugging
+        # "hazyresearch/m07d11_longhealth_synthesize_llama-3.2-3b_p10_n65536-2", # TODO: only for faster debugging
     ]
     model = HFModelConfig(
         pretrained_model_name_or_path="meta-llama/Llama-3.2-3B-Instruct",
