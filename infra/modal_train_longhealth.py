@@ -8,9 +8,10 @@ Configurable via environment variables:
     GPU_TYPE        GPU type (default: H100)
     GPU_COUNT       GPUs per node (default: 8)
     NUM_NODES       Number of nodes (default: 4, so 32 GPUs total)
-    MODEL           Model to train: "llama" or "qwen" (default: llama)
-    NUM_TOKENS      KV cache size in tokens (default: 2048)
-    BRANCH          Git branch to use (default: main)
+    MODEL               Model to train: "llama" or "qwen" (default: llama)
+    NUM_TOKENS          KV cache size in tokens (default: 2048)
+    GLOBAL_BATCH_SIZE   Total batch size across all GPUs (default: 32)
+    BRANCH              Git branch to use (default: main)
     MASTER_PORT     Port for torchrun rendezvous (default: 12355)
 
 Example (8 GPUs on a single node):
@@ -21,12 +22,14 @@ import os
 import subprocess
 
 import modal
+from modal.experimental import clustered, get_cluster_info
 
 GPU_TYPE = os.environ.get("GPU_TYPE", "H100")
 GPU_COUNT = int(os.environ.get("GPU_COUNT", 8))
 NUM_NODES = int(os.environ.get("NUM_NODES", 4))
 MODEL = os.environ.get("MODEL", "llama")
 NUM_TOKENS = os.environ.get("NUM_TOKENS", "2048")
+GLOBAL_BATCH_SIZE = os.environ.get("GLOBAL_BATCH_SIZE", "32")
 BRANCH = os.environ.get("BRANCH", "main")
 MASTER_PORT = os.environ.get("MASTER_PORT", "12355")
 
@@ -53,8 +56,7 @@ output_vol = modal.Volume.from_name("cartridges-output", create_if_missing=True)
 
 app = modal.App(f"jw-longhealth-train-{NUM_NODES * GPU_COUNT}x{GPU_TYPE}")
 
-
-@app.function(
+_app_function = app.function(
     image=image,
     gpu=f"{GPU_TYPE}:{GPU_COUNT}",
     secrets=[modal.Secret.from_name("jw-api-keys")],
@@ -63,26 +65,37 @@ app = modal.App(f"jw-longhealth-train-{NUM_NODES * GPU_COUNT}x{GPU_TYPE}")
         "/root/outputs": output_vol,
     },
     timeout=3600 * 12,
-    _experimental_cluster_size=NUM_NODES,
 )
-def train():
-    node_rank = int(os.environ.get("MODAL_RANK", 0))
-    master_addr = os.environ.get("MODAL_MASTER_ADDR", "localhost")
 
-    cmd = [
-        "torchrun",
-        f"--nproc_per_node={GPU_COUNT}",
-        f"--nnodes={NUM_NODES}",
-        f"--node_rank={node_rank}",
-        f"--master_addr={master_addr}",
-        f"--master_port={MASTER_PORT}",
-        "examples/benchmarks/longhealth/longhealth_train.py",
-    ]
+
+def _train():
+    if NUM_NODES > 1:
+        cluster_info = get_cluster_info()
+        node_rank = cluster_info.rank
+        master_addr = cluster_info.container_ips[0]
+        cmd = [
+            "torchrun",
+            f"--nproc_per_node={GPU_COUNT}",
+            f"--nnodes={NUM_NODES}",
+            f"--node_rank={node_rank}",
+            f"--master_addr={master_addr}",
+            f"--master_port={MASTER_PORT}",
+            "examples/benchmarks/longhealth/longhealth_train.py",
+        ]
+    else:
+        node_rank = 0
+        cmd = [
+            "torchrun",
+            "--standalone",
+            f"--nproc_per_node={GPU_COUNT}",
+            "examples/benchmarks/longhealth/longhealth_train.py",
+        ]
 
     env = {
         **os.environ,
         "MODEL": MODEL,
         "NUM_TOKENS": NUM_TOKENS,
+        "GLOBAL_BATCH_SIZE": GLOBAL_BATCH_SIZE,
         "CARTRIDGES_OUTPUT_DIR": "/root/outputs",
     }
 
@@ -90,9 +103,15 @@ def train():
     subprocess.run(cmd, cwd="/root/cartridges", env=env, check=True)
 
 
+if NUM_NODES > 1:
+    train = _app_function(clustered(NUM_NODES, rdma=True)(_train))
+else:
+    train = _app_function(_train)
+
+
 @app.local_entrypoint()
 def main():
     total_gpus = NUM_NODES * GPU_COUNT
     print(f"Launching longhealth training on {NUM_NODES} node(s) × {GPU_COUNT} {GPU_TYPE}s = {total_gpus} GPUs total")
-    print(f"Model: {MODEL}, NUM_TOKENS: {NUM_TOKENS}, Branch: {BRANCH}")
+    print(f"Model: {MODEL}, NUM_TOKENS: {NUM_TOKENS}, GLOBAL_BATCH_SIZE: {GLOBAL_BATCH_SIZE}, Branch: {BRANCH}")
     train.remote()

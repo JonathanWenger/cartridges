@@ -19,6 +19,7 @@ patients_str = f"p{NUM_PATIENTS}"
 patient_ids = [f"patient_{idx:02d}" for idx in patient_idxs]
 
 NUM_TOKENS = int(os.environ.get("NUM_TOKENS", "2048"))
+GLOBAL_BATCH_SIZE = int(os.environ.get("GLOBAL_BATCH_SIZE", "32"))
 
 MODEL = os.environ.get("MODEL", "llama")
 if MODEL == "llama":
@@ -53,7 +54,7 @@ config = TrainConfig(
     kv_cache_initializer=KVFromText.Config(max_tokens=NUM_TOKENS),
     lr=2e-2,
     epochs=2,
-    global_batch_size=128,
+    global_batch_size=GLOBAL_BATCH_SIZE,
     dataset=TrainDataset.Config(
         data_sources=[DataSource(path=source, type="hf") for source in data_sources],
         top_k_logits=20,
