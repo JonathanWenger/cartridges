@@ -20,6 +20,7 @@ patient_ids = [f"patient_{idx:02d}" for idx in patient_idxs]
 
 NUM_TOKENS = int(os.environ.get("NUM_TOKENS", "2048"))
 GLOBAL_BATCH_SIZE = int(os.environ.get("GLOBAL_BATCH_SIZE", "32"))
+SEED = int(os.environ.get("SEED", "42"))
 
 MODEL = os.environ.get("MODEL", "llama")
 if MODEL == "llama":
@@ -80,6 +81,7 @@ config = TrainConfig(
     name=FormatStringVariable(
         "longhealth_train_lr{lr}_toks{kv_cache_initializer.max_tokens}"
     ),
+    seed=SEED,
 )
 
 

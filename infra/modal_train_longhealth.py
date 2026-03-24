@@ -11,6 +11,7 @@ Configurable via environment variables:
     MODEL               Model to train: "llama" or "qwen" (default: llama)
     NUM_TOKENS          KV cache size in tokens (default: 2048)
     GLOBAL_BATCH_SIZE   Total batch size across all GPUs (default: 32)
+    SEED                Random seed (default: 42)
     BRANCH              Git branch to use (default: main)
     MASTER_PORT     Port for torchrun rendezvous (default: 12355)
 
@@ -26,10 +27,11 @@ from modal.experimental import clustered, get_cluster_info
 
 GPU_TYPE = os.environ.get("GPU_TYPE", "H100")
 GPU_COUNT = int(os.environ.get("GPU_COUNT", 8))
-NUM_NODES = int(os.environ.get("NUM_NODES", 4))
+NUM_NODES = int(os.environ.get("NUM_NODES", 1))
 MODEL = os.environ.get("MODEL", "llama")
 NUM_TOKENS = os.environ.get("NUM_TOKENS", "2048")
 GLOBAL_BATCH_SIZE = os.environ.get("GLOBAL_BATCH_SIZE", "32")
+SEED = os.environ.get("SEED", "42")
 BRANCH = os.environ.get("BRANCH", "main")
 MASTER_PORT = os.environ.get("MASTER_PORT", "12355")
 
@@ -96,6 +98,7 @@ def _train():
         "MODEL": MODEL,
         "NUM_TOKENS": NUM_TOKENS,
         "GLOBAL_BATCH_SIZE": GLOBAL_BATCH_SIZE,
+        "SEED": SEED,
         "CARTRIDGES_OUTPUT_DIR": "/root/outputs",
     }
 
@@ -112,6 +115,10 @@ else:
 @app.local_entrypoint()
 def main():
     total_gpus = NUM_NODES * GPU_COUNT
-    print(f"Launching longhealth training on {NUM_NODES} node(s) × {GPU_COUNT} {GPU_TYPE}s = {total_gpus} GPUs total")
-    print(f"Model: {MODEL}, NUM_TOKENS: {NUM_TOKENS}, GLOBAL_BATCH_SIZE: {GLOBAL_BATCH_SIZE}, Branch: {BRANCH}")
+    print(
+        f"Launching longhealth training on {NUM_NODES} node(s) × {GPU_COUNT} {GPU_TYPE}s = {total_gpus} GPUs total"
+    )
+    print(
+        f"Model: {MODEL}, NUM_TOKENS: {NUM_TOKENS}, GLOBAL_BATCH_SIZE: {GLOBAL_BATCH_SIZE}, Branch: {BRANCH}"
+    )
     train.remote()
