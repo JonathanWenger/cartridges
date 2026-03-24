@@ -325,7 +325,7 @@ class PartiallyTrainableCache(TrainableCache):
                 self.trainable_values = []
 
     def compute_values(self, keys: torch.Tensor, layer_idx: int) -> torch.Tensor:
-        """Compute values from trainable keys for a given layer.
+        """Compute (trainable) values from trainable keys for a given layer.
 
         Args:
             keys: ``(1, n_heads, num_trainable_tokens, head_dim)``
@@ -336,7 +336,21 @@ class PartiallyTrainableCache(TrainableCache):
         """
 
         raise NotImplementedError
-        # TODO: implement
+
+    def compute_attn_bias(
+        self, queries: torch.Tensor, keys: torch.Tensor, layer_idx: int
+    ) -> torch.Tensor:
+        """Compute attention bias for the trainable key positions from queries.
+
+        Args:
+            queries: ``(1, n_heads, seq_len, head_dim)``
+            layer_idx: Transformer layer index.
+
+        Returns:
+            ``(1, n_heads, seq_len, num_trainable_tokens)`` bias to add to the
+            attention logits for the trainable key positions.
+        """
+        raise NotImplementedError
 
     def update(
         self,

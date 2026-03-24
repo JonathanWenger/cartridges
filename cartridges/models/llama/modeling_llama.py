@@ -17,15 +17,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Callable, Literal, Optional, Union
 from dataclasses import dataclass
+from typing import Callable, Literal, Optional, Union
 
 import torch
+import torch.nn.functional as F
 import torch.utils.checkpoint
 from torch import nn
-import torch.nn.functional as F
-from torch.nn.attention.flex_attention import create_block_mask, flex_attention, BlockMask
-
+from torch.nn.attention.flex_attention import (
+    BlockMask,
+    create_block_mask,
+    flex_attention,
+)
 from transformers.activations import ACT2FN
 from transformers.cache_utils import Cache, DynamicCache
 from transformers.generation import GenerationMixin
@@ -39,8 +42,8 @@ from transformers.modeling_outputs import (
 from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS, dynamic_rope_update
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
 from transformers.utils import auto_docstring, can_return_tuple, logging
-from .configuration_llama import LlamaConfig
 
+from .configuration_llama import LlamaConfig
 
 logger = logging.get_logger(__name__)
 
@@ -236,7 +239,7 @@ def flex_attention_forward(
     kernel_options = kwargs.get("kernel_options", None)
     attn = flex_attention_train if mode == "train" else flex_attention_generate
 
-    score_mod = None
+    score_mod = None # TODO: 
     if attn_bias is not None:
         def score_mod(score, b, h, q_idx, kv_idx):
             return score + attn_bias[b, h, q_idx, kv_idx]
