@@ -1,7 +1,4 @@
-import torch
-import torch.nn.functional as F
 import fire
-
 import torch
 import torch.nn.functional as F
 
@@ -116,11 +113,6 @@ def main():
     x_eager = nnls_batched(A, b)
 
     print(f"Error in eager solution: {torch.linalg.norm(x_true - x_eager)}")
-
-    # # Compiled (first call traces, subsequent calls run the cached graph)
-    # x_compiled = nnls_batched_compiled(A, b)
-
-    # print("Max deviation eager vs compiled:", (x_eager - x_compiled).abs().max().item())
 
     # Gradients still work
     loss = (A @ x_eager.float().unsqueeze(-1)).squeeze(-1).sub(b).pow(2).sum()
